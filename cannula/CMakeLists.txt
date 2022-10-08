@@ -1,11 +1,12 @@
-
 cmake_minimum_required(VERSION 2.8)
 
 PROJECT(platelets)
 
-set(VTK_DIR "/lscratch/niber/VTK62/")
-set(BOOST_ROOT "/lscratch/niber/boost/")
-set(EIGEN_DIR "/lscratch/niber/Eigen/")
+set(CMAKE_CXX_STANDARD 14)
+
+set(VTK_DIR "/scratch/fiusco/VTK-8.2.0/VTK-build/")
+set(BOOST_ROOT "/scratch/fiusco/boost/")
+set(EIGEN_DIR "/scratch/fiusco/Eigen/")
 
 find_package(VTK REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem system)
@@ -20,14 +21,24 @@ MESSAGE(STATUS ${Boost_INCLUDE_DIR})
 #    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 #endif()
 
+if (NOT CMAKE_BUILD_TYPE)
+	message(STATUS "No build type selected, default to Release")
+	set(CMAKE_BUILD_TYPE "Release")
+endif()
+message("CMAKE_CXX_FLAGS is ${CMAKE_CXX_FLAGS}")
+message("CMAKE_C_FLAGS is ${CMAKE_C_FLAGS}")
+
+
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
 if(COMPILER_SUPPORTS_CXX14)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -msse3")
+    set(CMAKE_CXX_FLAGS "-std=c++14 -msse3")
 else()
         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
 endif()
 #set(CMAKE_BUILD_TYPE Debug)
+
+message("CMAKE_CXX_FLAGS is ${CMAKE_CXX_FLAGS}")
 
 add_executable(platelets MACOSX_BUNDLE ../lptmodel/BBox ../lptmodel/BVH ../lptmodel/RayTracer ../lptmodel/vtkhelpers ../lptmodel/Model ../lptmodel/CoordinateSystem ../lptmodel/Injector ../lptmodel/InputFileList ../lptmodel/Absorber ../lptmodel/ActivationModel ../lptmodel/Particle ../lptmodel/ParticleForces platelets_cannula)
 

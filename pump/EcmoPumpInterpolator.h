@@ -6,6 +6,7 @@
 #include <vtkEnSightGoldBinaryReader.h>
 #include <vtkSmartPointer.h>
 #include <vtkPointData.h>
+#include <vtkCellDataToPointData.h>
 
 // Interpolator
 class EcmoPumpInterpolator : public UnstructuredPointInterpolator
@@ -41,11 +42,10 @@ public:
 			// Extract relevant blocks and merge to one dataset
 			std::cout << "   Merging blocks" << std::endl;
 			vtkSmartPointer<vtkAppendFilter> datasetMerger = vtkSmartPointer<vtkAppendFilter>::New();
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "core"));
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "volute"));
+			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Rotating_region"));
+			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Static_region"));
 			datasetMerger->Update();
 			vtkUnstructuredGrid * ds = datasetMerger->GetOutput();
-
 			// Resize containers
 			std::cout << "   Copying data" << std::endl;
 			size_t nPts = ds->GetNumberOfPoints();

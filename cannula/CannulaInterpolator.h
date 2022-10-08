@@ -39,7 +39,7 @@ public:
 		datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Cannula"));
 		datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "CannulaInlet"));
 		datasetMerger->Update();*/
-		this->ds_ = vtkhelpers::getBlockByName(reader->GetOutput(), "Cannula");
+		this->ds_ = vtkhelpers::getBlockByName(reader->GetOutput(), "Subtract");
 
 		velocity_ = vtkFloatArray::SafeDownCast(ds_->GetPointData()->GetArray("Velocity"));
 		shearXX_  = vtkFloatArray::SafeDownCast(ds_->GetPointData()->GetArray("shearRateii"));
