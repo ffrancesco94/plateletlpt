@@ -20,13 +20,18 @@ public:
 	
 	virtual Interpolator * clone() = 0;
 
-	// Velocity and shear interpolation
-	virtual bool interpolate(const Vector & position, Vector & velocity, Matrix & shear) = 0;
+	//Velocity, shear and vorticity interpolation
+	virtual bool interpolate(const Vector & position, Vector & velocity, Matrix & shear, Vector & vorticity) = 0;
 
 	// Read next file
 	virtual void readData(std::string) = 0;
 
 	virtual bool hasData() const = 0;
+
+	GETSET(bool, computeVorticity);
+
+private:
+	bool computeVorticity_{true};
 };
 
 struct InterpolationWeight {

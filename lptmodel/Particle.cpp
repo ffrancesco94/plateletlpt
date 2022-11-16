@@ -52,7 +52,7 @@ TracerParticle * TracerParticle::clone() const
 	return new TracerParticle(*this); 
 }
 
-void TracerParticle::updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid)
+void TracerParticle::updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.})
 {
 	this->velocity() = fluidVelocity;
 }
@@ -85,11 +85,11 @@ MaterialParticle * MaterialParticle::clone() const
 	return new MaterialParticle(*this); 
 }
 
-void MaterialParticle::updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid)
+void MaterialParticle::updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.})
 {
 	// Compute total force
 	Vector totalForce(0, 0, 0);
-	ParticleForceData forceData{fluidVelocity, velocity(), shear, fluid, radius(), density()};
+	ParticleForceData forceData{fluidVelocity, velocity(), shear, fluid, radius(), density(), position(), rpm, fluidVorticity};
 
 	for(auto && particleForce : particleForces_)
 		totalForce += particleForce->getParticleForce(forceData);

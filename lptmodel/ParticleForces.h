@@ -12,6 +12,9 @@ struct ParticleForceData {
 	Fluid fluid;
 	scalar particleRadius;
 	scalar particleDensity;
+	Vector position;
+	scalar rpm;
+	Vector fluidVorticity;
 };
 
 struct ParticleForce {
@@ -39,6 +42,26 @@ public:
 	Vector getParticleForce(const ParticleForceData & forceData) override;
 	int typeId() const override { return typeId_; }
 	StokesDrag * clone() const { return new StokesDrag(*this); }
+
+private:
+	static int typeId_;
+};
+
+class SaffmanForce : public ParticleForce {
+public:
+	Vector getParticleForce(const ParticleForceData & forceData) override;
+	int typeId() const override { return typeId_; }
+	SaffmanForce * clone() const { return new SaffmanForce(*this); }
+
+private:
+	static int typeId_;
+};
+
+class CentrifugalForce : public ParticleForce {
+public:
+	Vector getParticleForce(const ParticleForceData & forceData) override;
+	int typeId() const override { return typeId_; }
+	CentrifugalForce * clone() const { return new CentrifugalForce(*this); }
 
 private:
 	static int typeId_;

@@ -27,7 +27,7 @@ public:
 	GETSET(int, collisionCount)
 	GETSET(scalar, injectionTime)
 
-	virtual void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid) = 0;
+	virtual void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) = 0;
 	virtual int typeId() const = 0;
 	virtual void fromJSON(const json & jsonObject) { }
 	virtual void writeBinary(std::ostream & os) const;
@@ -61,7 +61,7 @@ inline int registerParticleTypeToFactory(const std::string & typeName)
 class TracerParticle : public Particle {
 public:
 	TracerParticle * clone() const override;
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid) override;
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) override;
 	int typeId() const override { return typeId_; }
 
 private:
@@ -77,27 +77,29 @@ public:
 
 	GETSET(scalar, density)
 	GETSET(scalar, radius)
+	GETSET(Vector, fluidVelocity)
 
 	MaterialParticle * clone() const override;
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid) override;
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) override;
 	int typeId() const override;
 	void fromJSON(const json & jsonObject) override;
 	void writeBinary(std::ostream & out) const override;
 	void readBinary(std::istream & in) override;
+	std::vector<std::unique_ptr<ParticleForce>> particleForces_;
 
 private:
 	static int typeId_;
-
-	std::vector<std::unique_ptr<ParticleForce>> particleForces_;
 	scalar density_{1};
 	scalar radius_{1};
+	Vector fluidVelocity_{0., 0., 0.};
+	Vector fluidVorticity_{0., 0., 0.};
 };
 
 /* Particle moving with constant velocity (for testing) */
 class NoMomentumUpdateParticle : public Particle {
 public:
 	NoMomentumUpdateParticle * clone() const { return new NoMomentumUpdateParticle(*this); }
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid) { }
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) { }
 	virtual int typeId() const { return typeId_; }
 
 private:
