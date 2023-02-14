@@ -30,39 +30,43 @@ public:
 			// Read point data
 			read_from_stream(in, velocity_);
 			read_from_stream(in, shearRate_);
-			read_from_stream(in, vorticity_);
+			if (this->computeVorticity())
+				read_from_stream(in, vorticity_);
 			in.close();
 	 	} else {
 			// Read ensight data
 			std::cout << "   Reading data" << std::endl;
-			vtkSmartPointer<vtkEnSightGoldBinaryReader> reader = vtkSmartPointer<vtkEnSightGoldBinaryReader>::New();
-			reader->SetCaseFileName(fileName.c_str());
+			vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
+			reader->SetFileName(fileName.c_str());
 			reader->Update();
 
 			//reader->GetOutput()->Print(std::cout);
 
 			// Extract relevant blocks and merge to one dataset
-			std::cout << "   Merging blocks" << std::endl;
-			vtkSmartPointer<vtkAppendFilter> datasetMerger = vtkSmartPointer<vtkAppendFilter>::New();
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Rotating_region"));
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Static_region"));
-			datasetMerger->Update();
-			if (this->computeVorticity()) {
-			// Compute vorticity on the fly, to be cached with velocity and shear
-				std::cout << "   Computing vorticity" << std::endl;
-				vtkSmartPointer<vtkGradientFilter> vorticityComputer = vtkSmartPointer<vtkGradientFilter>::New();
-				vorticityComputer->ComputeDivergenceOff();
-				vorticityComputer->FasterApproximationOn();
-				vorticityComputer->ComputeGradientOff();
-				vorticityComputer->ComputeVorticityOn();
-				vorticityComputer->SetInputData(datasetMerger->GetOutput());
-				vorticityComputer->SetInputScalars(0, "Velocity");
-				vorticityComputer->Update();
+			// std::cout << "   Merging blocks" << std::endl;
+			// vtkSmartPointer<vtkAppendFilter> datasetMerger = vtkSmartPointer<vtkAppendFilter>::New();
+			// datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Rotating_region"));
+			// datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Static_region"));
+			// datasetMerger->Update();
+			// vtkUnstructuredGrid * ds;
+			// if (this->computeVorticity()) {
+			// // Compute vorticity on the fly, to be cached with velocity and shear
+			// 	std::cout << "   Computing vorticity" << std::endl;
+			// 	vtkSmartPointer<vtkGradientFilter> vorticityComputer = vtkSmartPointer<vtkGradientFilter>::New();
+			// 	vorticityComputer->ComputeDivergenceOff();
+			// 	vorticityComputer->FasterApproximationOn();
+			// 	vorticityComputer->ComputeGradientOff();
+			// 	vorticityComputer->ComputeVorticityOn();
+			// 	vorticityComputer->SetInputData(datasetMerger->GetOutput());
+			// 	vorticityComputer->SetInputScalars(0, "Velocity");
+			// 	vorticityComputer->Update();
 
-				vtkUnstructuredGrid * ds = vtkUnstructuredGrid::SafeDownCast(vorticityComputer->GetOutput());
-			} else {
-				vtkUnstructuredGrid * ds = datasetMerger->GetOutput();
-			}
+			// 	ds = vtkUnstructuredGrid::SafeDownCast(vorticityComputer->GetOutput());
+			// 	// ds = vorticityComputer->GetOutput();
+			// } else {
+			// 	ds = datasetMerger->GetOutput();
+			// }
+			vtkUnstructuredGrid* ds = reader->GetOutput();
 
 			// Resize containers
 			std::cout << "   Copying data" << std::endl;
@@ -70,15 +74,18 @@ public:
 			velocity_.resize(nPts, 3);
 			shearRate_.resize(nPts, 6);
 			vorticity_.resize(nPts, 3);
+			std::cout << "   Resized containers" << std::endl;
 
 			// Copy data
 			velocity_ 		  = vtkhelpers::getFloatArray(ds->GetPointData(), "Velocity");
+			std::cout << "   Copied velocity" << std::endl;
 			shearRate_.col(0) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateii");
 			shearRate_.col(1) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateij");
 			shearRate_.col(2) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateik");
 			shearRate_.col(3) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatejj");
 			shearRate_.col(4) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatejk");
 			shearRate_.col(5) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatekk");
+			std::cout << "   Copied shear" << std::endl;
 			if (this->computeVorticity())
 				vorticity_		  = vtkhelpers::getFloatArray(ds->GetPointData(), "Vorticity");
 
@@ -92,7 +99,8 @@ public:
 			this->writeSearchTree(out);
 			write_to_stream(out, velocity_);
 			write_to_stream(out, shearRate_);
-			write_to_stream(out, vorticity_);
+			if (this->computeVorticity())
+				write_to_stream(out, vorticity_);
 			out.close();
 		}
 

@@ -28,7 +28,7 @@ public:
 
 	virtual bool hasData() const = 0;
 
-	GETSET(bool, computeVorticity);
+	GETSET(bool, computeVorticity)
 
 private:
 	bool computeVorticity_{true};

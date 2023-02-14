@@ -47,9 +47,9 @@ void InputFileList::fromJSON(const json & jsonObject)
 		maxNumberOfFiles = jsonObject.at("maxNumberOfFiles");
 
 	if(maxNumberOfFiles == -1)
-		globFiles(folder, ".case");
+		globFiles(folder, ".vtu");
 	else
-		globFiles(folder, ".case", maxNumberOfFiles);
+		globFiles(folder, ".vtu", maxNumberOfFiles);
 }
 
 

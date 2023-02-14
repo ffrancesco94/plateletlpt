@@ -14,6 +14,9 @@ class Particle {
 public:
 	virtual ~Particle() { }
 	virtual Particle * clone() const = 0;
+	Particle() = default;
+	Particle(const Particle &);
+	Particle & operator=(const Particle &);
 
 	// Getters and setters
 	GETSET(Vector, position)
@@ -26,9 +29,18 @@ public:
 	GETSET(int, id)
 	GETSET(int, collisionCount)
 	GETSET(scalar, injectionTime)
+	GETSET(Vector, fluidVelocity)
+	GETSET(Vector, fluidVorticity)
 
-	virtual void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) = 0;
+	GETSET(scalar, density)
+	GETSET(scalar, radius)
+
+
+	GETSET(std::vector<std::unique_ptr<ParticleForce>>, particleForces)
+
+	virtual void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, const Vector & fluidVorticity = {0., 0., 0.}) = 0;
 	virtual int typeId() const = 0;
+	virtual std::string typeName() const = 0;
 	virtual void fromJSON(const json & jsonObject) { }
 	virtual void writeBinary(std::ostream & os) const;
 	virtual void readBinary(std::istream & is);
@@ -44,6 +56,13 @@ private:
 	bool isAlive_{true};
 	int collisionCount_{0};
 	scalar injectionTime_{-1};
+	Vector fluidVelocity_{0., 0., 0.};
+	Vector fluidVorticity_{0., 0., 0.};
+	std::vector<std::unique_ptr<ParticleForce>> particleForces_;
+
+protected:
+	scalar density_{0};
+	scalar radius_{0};
 };
 
 /* Particle creation */
@@ -61,49 +80,52 @@ inline int registerParticleTypeToFactory(const std::string & typeName)
 class TracerParticle : public Particle {
 public:
 	TracerParticle * clone() const override;
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) override;
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, const Vector & fluidVorticity = {0., 0., 0.}) override;
 	int typeId() const override { return typeId_; }
+	std::string typeName() const override { return typeName_; }
 
 private:
 	static int typeId_;
+	static std::string typeName_;
 };
 
 /* Material particle */
 class MaterialParticle : public Particle {
 public:
-	MaterialParticle() = default;
-	MaterialParticle(const MaterialParticle &);
-	MaterialParticle & operator=(const MaterialParticle &);
+	// MaterialParticle() = default;
+	// MaterialParticle(const MaterialParticle &);
+	// MaterialParticle & operator=(const MaterialParticle &);
 
-	GETSET(scalar, density)
-	GETSET(scalar, radius)
-	GETSET(Vector, fluidVelocity)
+
+	
+	
 
 	MaterialParticle * clone() const override;
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) override;
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, const Vector & fluidVorticity = {0., 0., 0.}) override;
 	int typeId() const override;
+	std::string typeName() const override { return typeName_;} 
 	void fromJSON(const json & jsonObject) override;
 	void writeBinary(std::ostream & out) const override;
 	void readBinary(std::istream & in) override;
-	std::vector<std::unique_ptr<ParticleForce>> particleForces_;
+	
 
 private:
 	static int typeId_;
-	scalar density_{1};
-	scalar radius_{1};
-	Vector fluidVelocity_{0., 0., 0.};
-	Vector fluidVorticity_{0., 0., 0.};
+	static std::string typeName_;
 };
 
 /* Particle moving with constant velocity (for testing) */
 class NoMomentumUpdateParticle : public Particle {
 public:
 	NoMomentumUpdateParticle * clone() const { return new NoMomentumUpdateParticle(*this); }
-	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, scalar rpm = 0, const Vector & fluidVorticity = {0., 0., 0.}) { }
-	virtual int typeId() const { return typeId_; }
+	void updateMomentum(scalar dt, const Vector & fluidVelocity, const Matrix & shear, const Fluid & fluid, const Vector & fluidVorticity = {0., 0., 0.}) { }
+	int typeId() const override { return typeId_; }
+	std::string typeName() const override { return typeName_;} 
+	
 
 private:
 	static int typeId_;
+	static std::string typeName_;
 };
 
 

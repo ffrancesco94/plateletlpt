@@ -13,7 +13,6 @@ struct ParticleForceData {
 	scalar particleRadius;
 	scalar particleDensity;
 	Vector position;
-	scalar rpm;
 	Vector fluidVorticity;
 };
 
