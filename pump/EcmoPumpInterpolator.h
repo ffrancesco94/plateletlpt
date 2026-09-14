@@ -7,6 +7,7 @@
 #include <vtkSmartPointer.h>
 #include <vtkPointData.h>
 #include <vtkCellDataToPointData.h>
+#include <vtkGradientFilter.h>
 
 // Interpolator
 class EcmoPumpInterpolator : public UnstructuredPointInterpolator
@@ -29,37 +30,64 @@ public:
 			// Read point data
 			read_from_stream(in, velocity_);
 			read_from_stream(in, shearRate_);
+			if (this->computeVorticity())
+				read_from_stream(in, vorticity_);
 			in.close();
 	 	} else {
 			// Read ensight data
 			std::cout << "   Reading data" << std::endl;
-			vtkSmartPointer<vtkEnSightGoldBinaryReader> reader = vtkSmartPointer<vtkEnSightGoldBinaryReader>::New();
-			reader->SetCaseFileName(fileName.c_str());
+			vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
+			reader->SetFileName(fileName.c_str());
 			reader->Update();
 
 			//reader->GetOutput()->Print(std::cout);
 
 			// Extract relevant blocks and merge to one dataset
-			std::cout << "   Merging blocks" << std::endl;
-			vtkSmartPointer<vtkAppendFilter> datasetMerger = vtkSmartPointer<vtkAppendFilter>::New();
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Rotating_region"));
-			datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Static_region"));
-			datasetMerger->Update();
-			vtkUnstructuredGrid * ds = datasetMerger->GetOutput();
+			// std::cout << "   Merging blocks" << std::endl;
+			// vtkSmartPointer<vtkAppendFilter> datasetMerger = vtkSmartPointer<vtkAppendFilter>::New();
+			// datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Rotating_region"));
+			// datasetMerger->AddInputData(vtkhelpers::getBlockByName(reader->GetOutput(), "Static_region"));
+			// datasetMerger->Update();
+			// vtkUnstructuredGrid * ds;
+			// if (this->computeVorticity()) {
+			// // Compute vorticity on the fly, to be cached with velocity and shear
+			// 	std::cout << "   Computing vorticity" << std::endl;
+			// 	vtkSmartPointer<vtkGradientFilter> vorticityComputer = vtkSmartPointer<vtkGradientFilter>::New();
+			// 	vorticityComputer->ComputeDivergenceOff();
+			// 	vorticityComputer->FasterApproximationOn();
+			// 	vorticityComputer->ComputeGradientOff();
+			// 	vorticityComputer->ComputeVorticityOn();
+			// 	vorticityComputer->SetInputData(datasetMerger->GetOutput());
+			// 	vorticityComputer->SetInputScalars(0, "Velocity");
+			// 	vorticityComputer->Update();
+
+			// 	ds = vtkUnstructuredGrid::SafeDownCast(vorticityComputer->GetOutput());
+			// 	// ds = vorticityComputer->GetOutput();
+			// } else {
+			// 	ds = datasetMerger->GetOutput();
+			// }
+			vtkUnstructuredGrid* ds = reader->GetOutput();
+
 			// Resize containers
 			std::cout << "   Copying data" << std::endl;
 			size_t nPts = ds->GetNumberOfPoints();
 			velocity_.resize(nPts, 3);
 			shearRate_.resize(nPts, 6);
+			vorticity_.resize(nPts, 3);
+			std::cout << "   Resized containers" << std::endl;
 
 			// Copy data
 			velocity_ 		  = vtkhelpers::getFloatArray(ds->GetPointData(), "Velocity");
+			std::cout << "   Copied velocity" << std::endl;
 			shearRate_.col(0) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateii");
 			shearRate_.col(1) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateij");
 			shearRate_.col(2) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRateik");
 			shearRate_.col(3) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatejj");
 			shearRate_.col(4) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatejk");
 			shearRate_.col(5) = vtkhelpers::getFloatArray(ds->GetPointData(), "shearRatekk");
+			std::cout << "   Copied shear" << std::endl;
+			if (this->computeVorticity())
+				vorticity_		  = vtkhelpers::getFloatArray(ds->GetPointData(), "Vorticity");
 
 			// Build search tree
 			std::cout << "   Building search tree" << std::endl;
@@ -71,6 +99,8 @@ public:
 			this->writeSearchTree(out);
 			write_to_stream(out, velocity_);
 			write_to_stream(out, shearRate_);
+			if (this->computeVorticity())
+				write_to_stream(out, vorticity_);
 			out.close();
 		}
 
@@ -84,7 +114,7 @@ public:
 		return new EcmoPumpInterpolator(*this);
 	}
 
-	virtual bool interpolate(const Vector & position, Vector & velocity, Matrix & shear)
+	virtual bool interpolate(const Vector & position, Vector & velocity, Matrix & shear, Vector & vorticity)
 	{
 		// Get interpolation weights
 		scalar searchRadiusGuess = 1e-4;
@@ -92,11 +122,13 @@ public:
 		std::vector<InterpolationWeight > weights;
 		if(this->getInterpolationWeights(position, searchRadiusGuess, maxSearchRadius, weights)) {
 			velocity.setZero();
+			vorticity.setZero();
 			shear.setZero();
 	
 			scalar weightSum = 0;
 			for(auto weight : weights) {
 				velocity += weight.weight * velocity_.row(weight.pointId);
+				vorticity += weight.weight * vorticity_.row(weight.pointId);
 				shear(0, 0) += weight.weight * shearRate_(weight.pointId, 0);
 				shear(0, 1) += weight.weight * shearRate_(weight.pointId, 1);
 				shear(0, 2) += weight.weight * shearRate_(weight.pointId, 2);
@@ -111,13 +143,14 @@ public:
 
 			shear /= weightSum;
 			velocity /= weightSum;
-			
+			vorticity /= weightSum;
 			return true;
 		} else {
 			// Fall back to nearest neighbor
 			int pointIndx;
 			if(this->getNearestNeighbor(position, pointIndx)) {
 				velocity = velocity_.row(pointIndx);
+				vorticity = vorticity_.row(pointIndx);
 				shear(0, 0) = shearRate_(pointIndx, 0);
 				shear(0, 1) = shearRate_(pointIndx, 1);
 				shear(0, 2) = shearRate_(pointIndx, 2);
@@ -141,4 +174,5 @@ private:
 	bool hasRead_;
 	Eigen::Matrix<float, Eigen::Dynamic, 3> velocity_;
 	Eigen::Matrix<float, Eigen::Dynamic, 6> shearRate_;
+	Eigen::Matrix<float, Eigen::Dynamic, 3> vorticity_;
 };

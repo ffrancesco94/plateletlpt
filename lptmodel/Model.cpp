@@ -8,6 +8,7 @@
 #include "Injector.h"
 #include <algorithm>
 #include "DynamicFactory.hh"
+#include <omp.h>
 
 Model::~Model()
 {
@@ -131,7 +132,7 @@ void Model::injectParticles()
 	int numberOfInjectedParticles = 0;
 	for(auto && p : particlesToInject) {
 		if(interpolator_)
-			interpolator_->interpolate(p->position(), p->velocity(), p->shear());
+			interpolator_->interpolate(p->position(), p->velocity(), p->shear(), p->fluidVorticity());
 		p->isAlive() = true;
 		p->injectionTime() = this->time();
 		addParticle(p);
@@ -151,6 +152,7 @@ void Model::addParticle(Particle * particle)
 void Model::updateParticles()
 {
 	std::cout << "  Updating particles" << std::endl;
+	#pragma omp parallel for
 	for(auto && p : particles_) {
 		if( ! p->isAlive())
 			continue;
@@ -166,7 +168,8 @@ void Model::updateParticleMomentumAndActivation(Particle * p)
 	if(interpolator_) {
 		Matrix shear;
 		Vector fluidVelocity;
-		if(!interpolator_->interpolate(p->position(), fluidVelocity, shear)) {
+		Vector fluidVorticity;
+		if(!interpolator_->interpolate(p->position(), fluidVelocity, shear, fluidVorticity)) {
 			p->isAlive() = false;
 			return;
 		}
@@ -174,22 +177,26 @@ void Model::updateParticleMomentumAndActivation(Particle * p)
 		if(substeps() > 1) {
 			// Linear interpolation between the value from the two interpolators
 			Matrix shear2;
-			Vector fluidVelocity2;				
-			if(!interpolatorNext_->interpolate(p->position(), fluidVelocity2, shear2)) {
+			Vector fluidVelocity2;	
+			Vector fluidVorticity2;			
+			if(!interpolatorNext_->interpolate(p->position(), fluidVelocity2, shear2, fluidVorticity)) {
 				p->isAlive() = false;
 				return;
 			}
 
 			fluidVelocity = (1 - currentTimeStepFraction()) * fluidVelocity + currentTimeStepFraction() * fluidVelocity2;
 			shear = (1 - currentTimeStepFraction()) * shear + currentTimeStepFraction() * shear2;
+			fluidVorticity = (1 - currentTimeStepFraction()) * fluidVorticity + currentTimeStepFraction() * fluidVorticity2;
 		}
 
-		p->updateMomentum(dt(), fluidVelocity, shear, fluid());
+		p->updateMomentum(dt(), fluidVelocity, shear, fluid(), fluidVorticity);
 
 		// Update pas
 		scalar tau = std::sqrt(2) * fluid().mu() * shear.norm();
 		activationModel_->evaluate(dt(), tau, p->dose(), p->pas());
 		p->shear() = shear;
+		p->fluidVelocity() = fluidVelocity;
+		p->fluidVorticity() = fluidVorticity;
 	}
 }
 
@@ -340,11 +347,47 @@ void Model::writeParticles(std::string fileName) const
 	if(out.good()) {
 		std::cout << "  Writing data to " << fileName << std::endl;
 		// Write header
-		out << "id,injection_time,age,x,y,z,ux,uy,uz,pas,tauXX,tauXY,tauXZ,tauYY,tauYZ,tauZZ,dose,isAlive,collisionCount" << std::endl;
+		out << "id,injection_time,age,x,y,z,ux,uy,uz,pas,tauXX,tauXY,tauXZ,tauYY,tauYZ,tauZZ,dose,isAlive,collisionCount,ucx,ucy,ucz,Dx,Dy,Dz,Lx,Ly,Lz,r,rho" << std::endl;
 
 		// Write particle data
 		for(auto &&  p : particles_) {
-			out 	<< p->id() << ","
+			if (p->typeName() == "MaterialParticle") {
+				int drag_id = StokesDrag().typeId();
+				int saffman_id = SaffmanForce().typeId();
+				Vector drag, saffman;
+				ParticleForceData forceData{p->fluidVelocity(), p->velocity(),p->shear(),fluid(),p->radius(),p->density(),p->position(),p->fluidVorticity()};
+				for (auto && force : p->particleForces()) {
+					if (force->typeId() == drag_id) {
+						drag = force->getParticleForce(forceData);
+					} else if (force->typeId() == saffman_id) {
+						saffman = force->getParticleForce(forceData);
+					}
+				}
+				
+				out 	<< p->id() << ","
+						<< p->injectionTime() << ","
+						<< p->age() << ","
+						<< p->position()[0] << "," << p->position()[1] << "," << p->position()[2] << ","
+						<< p->velocity()[0] << "," << p->velocity()[1] << "," << p->velocity()[2] << ","
+						<< p->pas() << ","
+						<< 2*fluid().mu() * p->shear()(0, 0) << ","
+						<< 2*fluid().mu() * p->shear()(0, 1) << ","
+						<< 2*fluid().mu() * p->shear()(0, 2) << ","
+						<< 2*fluid().mu() * p->shear()(1, 1) << ","
+						<< 2*fluid().mu() * p->shear()(1, 2) << ","
+						<< 2*fluid().mu() * p->shear()(2, 2) << ","
+						<< p->dose() << ","
+						<< p->isAlive() << ","
+						<< p->collisionCount() << ","
+						<< p->fluidVelocity()[0] << "," << p->fluidVelocity()[1] << "," << p->fluidVelocity()[2] << ","
+						<< drag[0] << "," << drag[1] << "," << drag[2] << ","
+						<< saffman[0] << "," << saffman[1] << "," << saffman[2] << ","
+						<< p->radius() << ","
+						<< p->density()    
+						<< std::endl;
+
+			} else if (p->typeName() == "TracerParticle") {
+				out << p->id() << ","
 					<< p->injectionTime() << ","
 					<< p->age() << ","
 					<< p->position()[0] << "," << p->position()[1] << "," << p->position()[2] << ","
@@ -358,8 +401,10 @@ void Model::writeParticles(std::string fileName) const
 					<< 2*fluid().mu() * p->shear()(2, 2) << ","
 					<< p->dose() << ","
 					<< p->isAlive() << ","
-					<< p->collisionCount()
-					<< std::endl;
+					<< p->collisionCount() << ","
+					<< p->fluidVelocity()[0] << "," << p->fluidVelocity()[1] << "," << p->fluidVelocity()[2] << "," 
+					<< "0,0,0,0,0,0" << std::endl;
+		}
 		}
 	} else {
 		std::cout << "  Could not open " << fileName << " for writing" << std::endl;
